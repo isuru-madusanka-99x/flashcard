@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flashcard Cloud App</title>
+<title>Flashcard Pro Cloud</title>
 
 <style>
 body {
@@ -15,7 +15,7 @@ body {
 }
 
 .container {
-    max-width: 500px;
+    max-width: 650px;
     margin: auto;
 }
 
@@ -30,8 +30,8 @@ h2 { margin-bottom: 5px; }
 input, button {
     padding: 10px;
     margin: 5px;
-    width: 90%;
-    max-width: 400px;
+    width: 95%;
+    max-width: 500px;
 }
 
 button {
@@ -65,9 +65,19 @@ button.secondary {
     margin: 5px;
 }
 
-.progress {
+.stats {
+    background: white;
+    padding: 12px;
+    border-radius: 8px;
     margin-top: 10px;
+    text-align: left;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.mastery-label {
+    margin-top: 5px;
     font-size: 14px;
+    font-weight: bold;
 }
 </style>
 </head>
@@ -75,15 +85,12 @@ button.secondary {
 
 <div class="container">
 
-<h2>📚 Flashcard Cloud</h2>
-
+<h2>📚 Flashcard Pro Cloud</h2>
 <div id="syncStatus">🔄 Connecting...</div>
 
-<div style="margin-bottom:10px;">
-    <button onclick="toggleMode()" id="modeBtn" class="secondary">
-        Switch to Random Mode
-    </button>
-</div>
+<button onclick="showRandomCard()" class="secondary">
+🎲 Random Card
+</button>
 
 <div>
     <input id="word" placeholder="Word">
@@ -92,8 +99,10 @@ button.secondary {
 </div>
 
 <div class="card" onclick="flipCard()" id="card">
-    Loading...
+Loading...
 </div>
+
+<div class="mastery-label" id="masteryLabel"></div>
 
 <div class="review-buttons" id="reviewButtons" style="display:none;">
     <button onclick="review(0)">Again</button>
@@ -101,7 +110,10 @@ button.secondary {
     <button onclick="review(5)">Easy</button>
 </div>
 
-<div class="progress" id="progress"></div>
+<h3>📊 Learning Statistics</h3>
+<div class="stats" id="statsBox">
+Loading stats...
+</div>
 
 </div>
 
@@ -113,11 +125,10 @@ let cards = [];
 let currentCard = null;
 let showMeaning = false;
 let syncing = false;
-let randomMode = false;
 
-// ============================
+// =====================
 // Utility
-// ============================
+// =====================
 
 function today() {
     return new Date().toISOString().split("T")[0];
@@ -127,9 +138,9 @@ function setStatus(text) {
     document.getElementById("syncStatus").innerText = text;
 }
 
-// ============================
+// =====================
 // Cloud Sync
-// ============================
+// =====================
 
 async function loadFromCloud() {
     try {
@@ -137,52 +148,34 @@ async function loadFromCloud() {
         const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
             headers: { "X-Master-Key": API_KEY }
         });
-
         const data = await res.json();
         cards = data.record || [];
         loadNextCard();
-        updateProgress();
+        updateStats();
         setStatus("✅ Synced");
     } catch (err) {
         setStatus("⚠ Sync failed");
-        console.error(err);
     }
 }
 
 async function saveToCloud() {
-    try {
-        syncing = true;
-        setStatus("⬆ Saving...");
-        await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Master-Key": API_KEY
-            },
-            body: JSON.stringify(cards)
-        });
-        setStatus("✅ Synced");
-        syncing = false;
-    } catch (err) {
-        setStatus("⚠ Save failed");
-        console.error(err);
-    }
+    syncing = true;
+    setStatus("⬆ Saving...");
+    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Master-Key": API_KEY
+        },
+        body: JSON.stringify(cards)
+    });
+    syncing = false;
+    setStatus("✅ Synced");
 }
 
-// ============================
-// Mode Toggle
-// ============================
-
-function toggleMode() {
-    randomMode = !randomMode;
-    document.getElementById("modeBtn").innerText =
-        randomMode ? "Switch to SRS Mode" : "Switch to Random Mode";
-    loadNextCard();
-}
-
-// ============================
-// Flashcard Logic
-// ============================
+// =====================
+// Card Logic
+// =====================
 
 function addCard() {
     const word = document.getElementById("word").value.trim();
@@ -202,7 +195,7 @@ function addCard() {
     document.getElementById("meaning").value = "";
 
     saveToCloud();
-    loadNextCard();
+    updateStats();
 }
 
 function getDueCards() {
@@ -210,35 +203,34 @@ function getDueCards() {
 }
 
 function loadNextCard() {
-    if (cards.length === 0) {
-        document.getElementById("card").innerText = "No cards available";
+    const due = getDueCards();
+    if (due.length === 0) {
+        document.getElementById("card").innerText = "No cards due today 🎉";
         document.getElementById("reviewButtons").style.display = "none";
         return;
     }
 
-    if (randomMode) {
-        const randomIndex = Math.floor(Math.random() * cards.length);
-        currentCard = cards[randomIndex];
-        document.getElementById("reviewButtons").style.display = "none";
-    } else {
-        const due = getDueCards();
-        if (due.length === 0) {
-            document.getElementById("card").innerText = "No cards due today 🎉";
-            document.getElementById("reviewButtons").style.display = "none";
-            updateProgress();
-            return;
-        }
-        currentCard = due[0];
-        document.getElementById("reviewButtons").style.display = "block";
-    }
-
+    currentCard = due[0];
     showMeaning = false;
     renderCard();
+    document.getElementById("reviewButtons").style.display = "block";
+}
+
+function showRandomCard() {
+    if (cards.length === 0) return;
+    const index = Math.floor(Math.random() * cards.length);
+    currentCard = cards[index];
+    showMeaning = false;
+    renderCard();
+    document.getElementById("reviewButtons").style.display = "none";
 }
 
 function renderCard() {
     document.getElementById("card").innerText =
         showMeaning ? currentCard.meaning : currentCard.word;
+
+    document.getElementById("masteryLabel").innerText =
+        "Mastery Level: " + getMastery(currentCard);
 }
 
 function flipCard() {
@@ -247,12 +239,12 @@ function flipCard() {
     renderCard();
 }
 
-// ============================
-// SRS Review Logic
-// ============================
+// =====================
+// SRS Algorithm
+// =====================
 
 function review(score) {
-    if (!currentCard || randomMode) return;
+    if (!currentCard) return;
 
     if (score < 3) {
         currentCard.interval = 1;
@@ -269,21 +261,53 @@ function review(score) {
 
     saveToCloud();
     loadNextCard();
+    updateStats();
 }
 
-function updateProgress() {
+// =====================
+// Mastery Levels
+// =====================
+
+function getMastery(card) {
+    if (!card) return "";
+    if (card.interval >= 30) return "🏆 Mastered";
+    if (card.interval >= 14) return "💪 Strong";
+    if (card.interval >= 7) return "🙂 Learning";
+    return "🌱 New";
+}
+
+// =====================
+// Statistics
+// =====================
+
+function updateStats() {
     const total = cards.length;
     const due = getDueCards().length;
-    document.getElementById("progress").innerText =
-        `Total Cards: ${total} | Due Today: ${due}`;
+
+    let mastered = 0, strong = 0, learning = 0, newCards = 0;
+
+    cards.forEach(c => {
+        if (c.interval >= 30) mastered++;
+        else if (c.interval >= 14) strong++;
+        else if (c.interval >= 7) learning++;
+        else newCards++;
+    });
+
+    document.getElementById("statsBox").innerHTML = `
+        Total Cards: ${total}<br>
+        Due Today: ${due}<br><br>
+        🌱 New: ${newCards}<br>
+        🙂 Learning: ${learning}<br>
+        💪 Strong: ${strong}<br>
+        🏆 Mastered: ${mastered}
+    `;
 }
 
-// Auto sync every 30 seconds
+// Auto Sync every 30s
 setInterval(() => {
     if (!syncing) loadFromCloud();
 }, 30000);
 
-// Initial load
 loadFromCloud();
 </script>
 
