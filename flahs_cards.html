@@ -3,82 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flashcard Pro Cloud</title>
+<title>AI Flashcard Cloud</title>
 
 <style>
 body {
     font-family: Arial, sans-serif;
-    margin: 0;
+    background: #f4f6f9;
     padding: 20px;
     text-align: center;
-    background: #f4f6f9;
 }
 
-.container { max-width: 650px; margin: auto; }
-
-h2 { margin-bottom: 5px; }
-
-#syncStatus {
-    font-size: 12px;
-    margin-bottom: 10px;
-    color: #555;
-}
-
-input, button {
-    padding: 10px;
-    margin: 5px;
-    width: 95%;
-    max-width: 500px;
-}
-
-button {
-    cursor: pointer;
-    border: none;
-    border-radius: 5px;
-    background: #4a90e2;
-    color: white;
-}
-
-button.secondary { background: #666; }
+.container { max-width: 800px; margin: auto; }
 
 .card {
     background: white;
-    margin: 20px auto;
-    padding: 40px 20px;
+    padding: 25px;
     border-radius: 10px;
-    min-height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.review-buttons button {
-    width: 30%;
-    margin: 5px;
-}
-
-.stats {
-    background: white;
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 10px;
+    min-height: 150px;
+    margin-top: 20px;
     text-align: left;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    cursor: pointer;
 }
 
-.mastery-label {
-    margin-top: 5px;
-    font-size: 14px;
-    font-weight: bold;
+button {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 5px;
+    border: none;
+    background: #4a90e2;
+    color: white;
+    cursor: pointer;
 }
 
-.pronunciation {
+button.secondary {
+    background: #666;
+}
+
+.extra {
+    margin-top: 15px;
     font-size: 14px;
+    background: #f9f9f9;
+    padding: 10px;
+    border-radius: 6px;
+    display: none;
+    text-align: left;
+}
+
+audio {
     margin-top: 5px;
-    color: #444;
 }
 </style>
 </head>
@@ -86,183 +59,85 @@ button.secondary { background: #666; }
 
 <div class="container">
 
-<h2>📚 Flashcard Pro Cloud</h2>
-<div id="syncStatus">🔄 Connecting...</div>
+<h2>📚 AI Flashcard Cloud</h2>
 
-<button onclick="showRandomCard()" class="secondary">
-🎲 Random Card
-</button>
-
-<div>
-    <input id="word" placeholder="Word">
-    <button onclick="fetchMeaning()">Fetch Meaning</button>
-    <input id="meaning" placeholder="Meaning">
-    <div class="pronunciation" id="pronunciation"></div>
-    <button onclick="addCard()">Add Card</button>
-</div>
+<input id="word" placeholder="Enter word">
+<button onclick="fetchWord()">Fetch Basic Info</button>
+<button onclick="saveCard()">Save to Cloud</button>
 
 <div class="card" onclick="flipCard()" id="card">
-Loading...
+Click to fetch a word
 </div>
 
-<div class="mastery-label" id="masteryLabel"></div>
+<button onclick="toggleExtra()" id="extraBtn" style="display:none;">
+Show More Info
+</button>
 
-<div class="review-buttons" id="reviewButtons" style="display:none;">
-    <button onclick="review(0)">Again</button>
-    <button onclick="review(3)">Good</button>
-    <button onclick="review(5)">Easy</button>
-</div>
-
-<h3>📊 Learning Statistics</h3>
-<div class="stats" id="statsBox">Loading stats...</div>
+<div class="extra" id="extraInfo"></div>
 
 </div>
 
 <script>
+// ========================
+// CONFIGURATION
+// ========================
 const BIN_ID = "699d6ec4ae596e708f44dfef";
-const API_KEY = "$2a$10$7diuMWbqL0qUWeISngiAjeY6KqWgfrJUV5ZB1kv13gE/I8Ro9UN/u";
+const JSONBIN_KEY = "$2a$10$7diuMWbqL0qUWeISngiAjeY6KqWgfrJUV5ZB1kv13gE/I8Ro9UN/u";
+const OPENAI_API_KEY = "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";
 
-let cards = [];
 let currentCard = null;
 let showMeaning = false;
-let syncing = false;
 
-// ======================
-// Dictionary Fetch
-// ======================
-
-async function fetchMeaning() {
+// ========================
+// FETCH BASIC DICTIONARY INFO
+// ========================
+async function fetchWord() {
     const word = document.getElementById("word").value.trim();
-    if (!word) return alert("Enter a word first");
+    if (!word) return alert("Enter word");
 
-    try {
-        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-        const data = await res.json();
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+    const data = await res.json();
 
-        if (!Array.isArray(data)) throw "Not found";
+    if (!Array.isArray(data)) return alert("Word not found");
 
-        const definition = data[0].meanings[0].definitions[0].definition;
-        const phonetic = data[0].phonetic || "";
-        const audio = data[0].phonetics.find(p => p.audio)?.audio || "";
+    const entry = data[0];
 
-        document.getElementById("meaning").value = definition;
+    currentCard = {
+        word: entry.word,
+        phonetic: entry.phonetic || "",
+        audio: entry.phonetics.find(p => p.audio)?.audio || "",
+        definition: entry.meanings[0].definitions[0].definition,
+        extraLoaded: false
+    };
 
-        let pronunciationHTML = "";
-        if (phonetic) pronunciationHTML += `📖 ${phonetic} `;
-        if (audio) pronunciationHTML += `<br><audio controls src="${audio}"></audio>`;
-
-        document.getElementById("pronunciation").innerHTML = pronunciationHTML;
-
-    } catch (err) {
-        alert("Meaning not found.");
-    }
-}
-
-// ======================
-// Utility
-// ======================
-
-function today() {
-    return new Date().toISOString().split("T")[0];
-}
-
-function setStatus(text) {
-    document.getElementById("syncStatus").innerText = text;
-}
-
-// ======================
-// Cloud Sync
-// ======================
-
-async function loadFromCloud() {
-    try {
-        setStatus("🔄 Syncing...");
-        const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-            headers: { "X-Master-Key": API_KEY }
-        });
-        const data = await res.json();
-        cards = data.record || [];
-        loadNextCard();
-        updateStats();
-        setStatus("✅ Synced");
-    } catch {
-        setStatus("⚠ Sync failed");
-    }
-}
-
-async function saveToCloud() {
-    syncing = true;
-    setStatus("⬆ Saving...");
-    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "X-Master-Key": API_KEY
-        },
-        body: JSON.stringify(cards)
-    });
-    syncing = false;
-    setStatus("✅ Synced");
-}
-
-// ======================
-// Card Logic
-// ======================
-
-function addCard() {
-    const word = document.getElementById("word").value.trim();
-    const meaning = document.getElementById("meaning").value.trim();
-    if (!word || !meaning) return alert("Fill both fields");
-
-    cards.push({
-        word,
-        meaning,
-        interval: 1,
-        ease: 2.5,
-        nextReview: today(),
-        reviews: 0
-    });
-
-    document.getElementById("word").value = "";
-    document.getElementById("meaning").value = "";
-    document.getElementById("pronunciation").innerHTML = "";
-
-    saveToCloud();
-    updateStats();
-}
-
-function getDueCards() {
-    return cards.filter(c => c.nextReview <= today());
-}
-
-function loadNextCard() {
-    const due = getDueCards();
-    if (due.length === 0) {
-        document.getElementById("card").innerText = "No cards due today 🎉";
-        document.getElementById("reviewButtons").style.display = "none";
-        return;
-    }
-    currentCard = due[0];
     showMeaning = false;
+    document.getElementById("extraInfo").style.display = "none";
+    document.getElementById("extraBtn").style.display = "inline-block";
+    document.getElementById("extraBtn").innerText = "Show More Info";
+
     renderCard();
-    document.getElementById("reviewButtons").style.display = "block";
 }
 
-function showRandomCard() {
-    if (cards.length === 0) return;
-    const index = Math.floor(Math.random() * cards.length);
-    currentCard = cards[index];
-    showMeaning = false;
-    renderCard();
-    document.getElementById("reviewButtons").style.display = "none";
-}
-
+// ========================
+// RENDER FLASHCARD
+// ========================
 function renderCard() {
-    document.getElementById("card").innerText =
-        showMeaning ? currentCard.meaning : currentCard.word;
+    if (!currentCard) return;
 
-    document.getElementById("masteryLabel").innerText =
-        "Mastery Level: " + getMastery(currentCard);
+    let html = "";
+
+    if (!showMeaning) {
+        html += `<h3>${currentCard.word}</h3>`;
+        if (currentCard.phonetic)
+            html += `<div>${currentCard.phonetic}</div>`;
+        if (currentCard.audio)
+            html += `<audio controls src="${currentCard.audio}"></audio>`;
+    } else {
+        html += `<div><strong>Definition:</strong></div>`;
+        html += `<div>${currentCard.definition}</div>`;
+    }
+
+    document.getElementById("card").innerHTML = html;
 }
 
 function flipCard() {
@@ -271,76 +146,78 @@ function flipCard() {
     renderCard();
 }
 
-// ======================
-// SRS Algorithm
-// ======================
+// ========================
+// AI EXTRA INFO (On Demand)
+// ========================
+async function toggleExtra() {
+    const extraDiv = document.getElementById("extraInfo");
 
-function review(score) {
-    if (!currentCard) return;
-
-    if (score < 3) {
-        currentCard.interval = 1;
-    } else {
-        currentCard.interval = Math.round(currentCard.interval * currentCard.ease);
-        currentCard.ease += (0.1 - (5 - score) * (0.08 + (5 - score) * 0.02));
-        if (currentCard.ease < 1.3) currentCard.ease = 1.3;
+    if (extraDiv.style.display === "block") {
+        extraDiv.style.display = "none";
+        document.getElementById("extraBtn").innerText = "Show More Info";
+        return;
     }
 
-    currentCard.reviews++;
-    const next = new Date();
-    next.setDate(next.getDate() + currentCard.interval);
-    currentCard.nextReview = next.toISOString().split("T")[0];
+    if (!currentCard.extraLoaded) {
+        const prompt = `
+Provide:
+1) Different forms of the word "${currentCard.word}"
+2) Two natural example sentences
+3) A short memory hint
+Keep it concise.
+`;
 
-    saveToCloud();
-    loadNextCard();
-    updateStats();
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + OPENAI_API_KEY
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7
+            })
+        });
+
+        const data = await response.json();
+        currentCard.extraInfo = data.choices[0].message.content;
+        currentCard.extraLoaded = true;
+    }
+
+    extraDiv.innerHTML = currentCard.extraInfo.replace(/\n/g, "<br>");
+    extraDiv.style.display = "block";
+    document.getElementById("extraBtn").innerText = "Hide More Info";
 }
 
-// ======================
-// Mastery Levels
-// ======================
+// ========================
+// SAVE TO JSONBIN CLOUD
+// ========================
+async function saveCard() {
+    if (!currentCard) return alert("Fetch word first");
 
-function getMastery(card) {
-    if (!card) return "";
-    if (card.interval >= 30) return "🏆 Mastered";
-    if (card.interval >= 14) return "💪 Strong";
-    if (card.interval >= 7) return "🙂 Learning";
-    return "🌱 New";
-}
-
-// ======================
-// Statistics
-// ======================
-
-function updateStats() {
-    const total = cards.length;
-    const due = getDueCards().length;
-
-    let mastered = 0, strong = 0, learning = 0, newCards = 0;
-
-    cards.forEach(c => {
-        if (c.interval >= 30) mastered++;
-        else if (c.interval >= 14) strong++;
-        else if (c.interval >= 7) learning++;
-        else newCards++;
+    // Load existing cards
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { "X-Master-Key": JSONBIN_KEY }
     });
 
-    document.getElementById("statsBox").innerHTML = `
-        Total Cards: ${total}<br>
-        Due Today: ${due}<br><br>
-        🌱 New: ${newCards}<br>
-        🙂 Learning: ${learning}<br>
-        💪 Strong: ${strong}<br>
-        🏆 Mastered: ${mastered}
-    `;
+    const data = await res.json();
+    const cards = data.record || [];
+
+    cards.push(currentCard);
+
+    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Master-Key": JSONBIN_KEY
+        },
+        body: JSON.stringify(cards)
+    });
+
+    alert("Saved to cloud!");
 }
 
-// Auto Sync
-setInterval(() => {
-    if (!syncing) loadFromCloud();
-}, 30000);
-
-loadFromCloud();
 </script>
 
 </body>
