@@ -14,10 +14,7 @@ body {
     background: #f4f6f9;
 }
 
-.container {
-    max-width: 650px;
-    margin: auto;
-}
+.container { max-width: 650px; margin: auto; }
 
 h2 { margin-bottom: 5px; }
 
@@ -42,9 +39,7 @@ button {
     color: white;
 }
 
-button.secondary {
-    background: #666;
-}
+button.secondary { background: #666; }
 
 .card {
     background: white;
@@ -79,6 +74,12 @@ button.secondary {
     font-size: 14px;
     font-weight: bold;
 }
+
+.pronunciation {
+    font-size: 14px;
+    margin-top: 5px;
+    color: #444;
+}
 </style>
 </head>
 <body>
@@ -94,7 +95,9 @@ button.secondary {
 
 <div>
     <input id="word" placeholder="Word">
+    <button onclick="fetchMeaning()">Fetch Meaning</button>
     <input id="meaning" placeholder="Meaning">
+    <div class="pronunciation" id="pronunciation"></div>
     <button onclick="addCard()">Add Card</button>
 </div>
 
@@ -111,9 +114,7 @@ Loading...
 </div>
 
 <h3>📊 Learning Statistics</h3>
-<div class="stats" id="statsBox">
-Loading stats...
-</div>
+<div class="stats" id="statsBox">Loading stats...</div>
 
 </div>
 
@@ -126,9 +127,40 @@ let currentCard = null;
 let showMeaning = false;
 let syncing = false;
 
-// =====================
+// ======================
+// Dictionary Fetch
+// ======================
+
+async function fetchMeaning() {
+    const word = document.getElementById("word").value.trim();
+    if (!word) return alert("Enter a word first");
+
+    try {
+        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+        const data = await res.json();
+
+        if (!Array.isArray(data)) throw "Not found";
+
+        const definition = data[0].meanings[0].definitions[0].definition;
+        const phonetic = data[0].phonetic || "";
+        const audio = data[0].phonetics.find(p => p.audio)?.audio || "";
+
+        document.getElementById("meaning").value = definition;
+
+        let pronunciationHTML = "";
+        if (phonetic) pronunciationHTML += `📖 ${phonetic} `;
+        if (audio) pronunciationHTML += `<br><audio controls src="${audio}"></audio>`;
+
+        document.getElementById("pronunciation").innerHTML = pronunciationHTML;
+
+    } catch (err) {
+        alert("Meaning not found.");
+    }
+}
+
+// ======================
 // Utility
-// =====================
+// ======================
 
 function today() {
     return new Date().toISOString().split("T")[0];
@@ -138,9 +170,9 @@ function setStatus(text) {
     document.getElementById("syncStatus").innerText = text;
 }
 
-// =====================
+// ======================
 // Cloud Sync
-// =====================
+// ======================
 
 async function loadFromCloud() {
     try {
@@ -153,7 +185,7 @@ async function loadFromCloud() {
         loadNextCard();
         updateStats();
         setStatus("✅ Synced");
-    } catch (err) {
+    } catch {
         setStatus("⚠ Sync failed");
     }
 }
@@ -173,9 +205,9 @@ async function saveToCloud() {
     setStatus("✅ Synced");
 }
 
-// =====================
+// ======================
 // Card Logic
-// =====================
+// ======================
 
 function addCard() {
     const word = document.getElementById("word").value.trim();
@@ -193,6 +225,7 @@ function addCard() {
 
     document.getElementById("word").value = "";
     document.getElementById("meaning").value = "";
+    document.getElementById("pronunciation").innerHTML = "";
 
     saveToCloud();
     updateStats();
@@ -209,7 +242,6 @@ function loadNextCard() {
         document.getElementById("reviewButtons").style.display = "none";
         return;
     }
-
     currentCard = due[0];
     showMeaning = false;
     renderCard();
@@ -239,9 +271,9 @@ function flipCard() {
     renderCard();
 }
 
-// =====================
+// ======================
 // SRS Algorithm
-// =====================
+// ======================
 
 function review(score) {
     if (!currentCard) return;
@@ -264,9 +296,9 @@ function review(score) {
     updateStats();
 }
 
-// =====================
+// ======================
 // Mastery Levels
-// =====================
+// ======================
 
 function getMastery(card) {
     if (!card) return "";
@@ -276,9 +308,9 @@ function getMastery(card) {
     return "🌱 New";
 }
 
-// =====================
+// ======================
 // Statistics
-// =====================
+// ======================
 
 function updateStats() {
     const total = cards.length;
@@ -303,7 +335,7 @@ function updateStats() {
     `;
 }
 
-// Auto Sync every 30s
+// Auto Sync
 setInterval(() => {
     if (!syncing) loadFromCloud();
 }, 30000);
