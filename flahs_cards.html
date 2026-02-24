@@ -1,124 +1,157 @@
 <script>
-    const BIN_ID = "699d5f85d0ea881f40d44ede";
-    const API_KEY = "$2a$10$7diuMWbqL0qUWeISngiAjeY6KqWgfrJUV5ZB1kv13gE/I8Ro9UN/u";
-    
-    let cards = [];
-    let currentCard = null;
-    let showMeaning = false;
-    
-    function today() {
-        return new Date().toISOString().split("T")[0];
+  const BIN_ID = "699d5f85d0ea881f40d44ede";
+  const API_KEY =
+    "$2a$10$7diuMWbqL0qUWeISngiAjeY6KqWgfrJUV5ZB1kv13gE/I8Ro9UN/u";
+
+  let cards = [];
+  let currentCard = null;
+  let showMeaning = false;
+  let syncing = false;
+
+  function today() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  function setStatus(text) {
+    document.getElementById("syncStatus").innerText = text;
+  }
+
+  // ============================
+  // CLOUD FUNCTIONS
+  // ============================
+
+  async function loadFromCloud() {
+    try {
+      setStatus("🔄 Syncing...");
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { "X-Master-Key": API_KEY },
+      });
+
+      const data = await res.json();
+      cards = data.record || [];
+      loadNextCard();
+      updateProgress();
+      setStatus("✅ Synced");
+    } catch (err) {
+      setStatus("⚠ Sync failed");
+      console.error(err);
     }
-    
-    // ============================
-    // 🔹 JSONBin Functions
-    // ============================
-    
-    async function loadFromCloud() {
-        const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-            headers: { "X-Master-Key": API_KEY }
-        });
-    
-        const data = await res.json();
-        cards = data.record || [];
-        loadNextCard();
-        updateProgress();
+  }
+
+  async function saveToCloud() {
+    try {
+      syncing = true;
+      setStatus("⬆ Saving...");
+      await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Master-Key": API_KEY,
+        },
+        body: JSON.stringify(cards),
+      });
+      setStatus("✅ Synced");
+      syncing = false;
+    } catch (err) {
+      setStatus("⚠ Save failed");
+      console.error(err);
     }
-    
-    async function saveToCloud() {
-        await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Master-Key": API_KEY
-            },
-            body: JSON.stringify(cards)
-        });
+  }
+
+  // ============================
+  // FLASHCARD LOGIC
+  // ============================
+
+  function addCard() {
+    const word = document.getElementById("word").value.trim();
+    const meaning = document.getElementById("meaning").value.trim();
+    if (!word || !meaning) return alert("Fill both fields");
+
+    cards.push({
+      word,
+      meaning,
+      interval: 1,
+      ease: 2.5,
+      nextReview: today(),
+      reviews: 0,
+    });
+
+    document.getElementById("word").value = "";
+    document.getElementById("meaning").value = "";
+
+    saveToCloud();
+    loadNextCard();
+  }
+
+  function getDueCards() {
+    return cards.filter((c) => c.nextReview <= today());
+  }
+
+  function loadNextCard() {
+    const due = getDueCards();
+
+    if (due.length === 0) {
+      document.getElementById("card").innerText = "No cards due today 🎉";
+      document.getElementById("reviewButtons").style.display = "none";
+      updateProgress();
+      return;
     }
-    
-    // ============================
-    // 🔹 Flashcard Logic
-    // ============================
-    
-    function addCard() {
-        const word = document.getElementById("word").value.trim();
-        const meaning = document.getElementById("meaning").value.trim();
-        if (!word || !meaning) return alert("Fill both fields");
-    
-        cards.push({
-            word,
-            meaning,
-            interval: 1,
-            ease: 2.5,
-            nextReview: today(),
-            reviews: 0
-        });
-    
-        document.getElementById("word").value = "";
-        document.getElementById("meaning").value = "";
-    
-        saveToCloud();
-        loadNextCard();
+
+    currentCard = due[0];
+    showMeaning = false;
+    renderCard();
+    document.getElementById("reviewButtons").style.display = "block";
+  }
+
+  function renderCard() {
+    document.getElementById("card").innerText = showMeaning
+      ? currentCard.meaning
+      : currentCard.word;
+  }
+
+  function flipCard() {
+    if (!currentCard) return;
+    showMeaning = !showMeaning;
+    renderCard();
+  }
+
+  function review(score) {
+    if (!currentCard) return;
+
+    if (score < 3) {
+      currentCard.interval = 1;
+    } else {
+      currentCard.interval = Math.round(
+        currentCard.interval * currentCard.ease,
+      );
+      currentCard.ease += 0.1 - (5 - score) * (0.08 + (5 - score) * 0.02);
+      if (currentCard.ease < 1.3) currentCard.ease = 1.3;
     }
-    
-    function getDueCards() {
-        return cards.filter(c => c.nextReview <= today());
-    }
-    
-    function loadNextCard() {
-        const due = getDueCards();
-    
-        if (due.length === 0) {
-            document.getElementById("card").innerText = "No cards due today 🎉";
-            document.getElementById("reviewButtons").style.display = "none";
-            updateProgress();
-            return;
-        }
-    
-        currentCard = due[0];
-        showMeaning = false;
-        renderCard();
-        document.getElementById("reviewButtons").style.display = "block";
-    }
-    
-    function renderCard() {
-        document.getElementById("card").innerText =
-            showMeaning ? currentCard.meaning : currentCard.word;
-    }
-    
-    function flipCard() {
-        if (!currentCard) return;
-        showMeaning = !showMeaning;
-        renderCard();
-    }
-    
-    function review(score) {
-        if (!currentCard) return;
-    
-        if (score < 3) {
-            currentCard.interval = 1;
-        } else {
-            currentCard.interval = Math.round(currentCard.interval * currentCard.ease);
-            currentCard.ease += (0.1 - (5 - score) * (0.08 + (5 - score) * 0.02));
-            if (currentCard.ease < 1.3) currentCard.ease = 1.3;
-        }
-    
-        currentCard.reviews++;
-        const next = new Date();
-        next.setDate(next.getDate() + currentCard.interval);
-        currentCard.nextReview = next.toISOString().split("T")[0];
-    
-        saveToCloud();
-        loadNextCard();
-    }
-    
-    function updateProgress() {
-        const total = cards.length;
-        const due = getDueCards().length;
-        document.getElementById("progress").innerText =
-            `Total Cards: ${total} | Due Today: ${due}`;
-    }
-    
-    // Load from cloud on startup
-    loadFromCloud();
-    </script>
+
+    currentCard.reviews++;
+    const next = new Date();
+    next.setDate(next.getDate() + currentCard.interval);
+    currentCard.nextReview = next.toISOString().split("T")[0];
+
+    saveToCloud();
+    loadNextCard();
+  }
+
+  function updateProgress() {
+    const total = cards.length;
+    const due = getDueCards().length;
+    document.getElementById("progress").innerText =
+      `Total Cards: ${total} | Due Today: ${due}`;
+  }
+
+  // ============================
+  // AUTO SYNC EVERY 30 SECONDS
+  // ============================
+
+  setInterval(() => {
+    if (!syncing) loadFromCloud();
+  }, 30000);
+
+  // Initial load
+  loadFromCloud();
+</script>
