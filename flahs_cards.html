@@ -127,6 +127,7 @@ let currentCard = null;
 let showMeaning = false;
 let syncing = false;
 let saveRequested = false;
+let saveRetryTimer = null;
 
 // ======================
 // Dictionary Fetch
@@ -171,6 +172,15 @@ function setStatus(text) {
     document.getElementById("syncStatus").innerText = text;
 }
 
+function scheduleSaveRetry() {
+    if (saveRetryTimer) return;
+
+    saveRetryTimer = setTimeout(() => {
+        saveRetryTimer = null;
+        saveToCloud();
+    }, 5000);
+}
+
 // ======================
 // Cloud Sync
 // ======================
@@ -198,6 +208,10 @@ async function loadFromCloud() {
 async function saveToCloud() {
     saveRequested = true;
     if (syncing) return;
+    if (saveRetryTimer) {
+        clearTimeout(saveRetryTimer);
+        saveRetryTimer = null;
+    }
 
     syncing = true;
     try {
@@ -218,6 +232,7 @@ async function saveToCloud() {
     } catch {
         saveRequested = true;
         setStatus("⚠ Save failed");
+        scheduleSaveRetry();
     } finally {
         syncing = false;
     }
